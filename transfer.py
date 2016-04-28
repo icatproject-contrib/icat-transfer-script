@@ -46,7 +46,7 @@ def client_login(client_name, config_name):
 
 
 def get_icat_limit():
-    return json.loads(requests.get('https://icatdev15.isis.cclrc.ac.uk/icat/properties').text)['maxEntities']
+    return json.loads(requests.get(export_config['url'] + '/icat/properties').text)['maxEntities']
 
 
 def get_entities():
@@ -65,7 +65,7 @@ def uuid_gen():
 def export_data():
     payload = {
         'json': '{"sessionId":"' + export_id + '", "query":"SELECT entity FROM ' + args.query + ' entity LIMIT ' + str(current_pos) + ',' + str(increment) + '", "attributes":"' + args.attributes + '"}'}
-    return requests.get('https://icatdev15.isis.cclrc.ac.uk/icat/port', params=payload)
+    return requests.get(export_config['url'] + '/icat/port', params=payload)
 
 
 # Writes the exported data to specified data_file
@@ -93,7 +93,7 @@ def post_data(data_file):
         }
 
         return requests.post(
-            'https://icat-dev.isis.stfc.ac.uk/icat/port',
+            import_config['url'] + '/icat/port',
             files=files,
             verify=False
         )
@@ -102,18 +102,8 @@ def post_data(data_file):
 # Assigns the status codes from the post request to report strings and returns them
 #
 # :param code: http status code from request.post().status_code
-def code_assignment(code):
-    if code == 412 and args.duplicate == 'throw':
-        code = 'throw'
-    if code == 412 and args.duplicate == 'check':
-        code = 'check'
-    return {
-        'throw': 'New data is duplicate of old or ' + args.query + ' does not exist.',
-        'check': 'New data does not match old data or ' + args.query + ' does not exist.',
-        204: 'Operation Successful',
-        412: args.query + ' is not an entity',
-        403: 'Only root users may import all attributes'
-    }[code]
+def debug(return_data):
+    print return_data.text
 
 
 def transfer_data():
@@ -123,6 +113,7 @@ def transfer_data():
     write_data(get_return, data_file)
 
     post_return = post_data(data_file)
+    debug(post_return)
 
     os.remove(data_file)
 
@@ -136,15 +127,15 @@ if __name__ == '__main__':
     args = add_arguments()
     attribute_assign()
 
-    export_client = icat.client.Client(export_config['url'])
-    import_client = icat.client.Client(import_config['url'])
+    export_client = icat.client.Client(export_config['url'] + '/ICATService/ICAT?wsdl')
+    import_client = icat.client.Client(import_config['url'] + '/ICATService/ICAT?wsdl')
 
     export_id = client_login(export_client, export_config)
     import_id = client_login(import_client, import_config)
 
     data_left = True
     current_pos = 0
-    increment = get_icat_limit()/10
+    increment = get_icat_limit()
     entities = get_entities()
 
     while data_left:
