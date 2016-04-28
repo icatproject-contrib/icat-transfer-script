@@ -4,6 +4,7 @@ import ConfigParser
 import os
 import argparse
 import uuid
+import json
 __author__ = 'Cox-Andrew'
 
 
@@ -37,45 +38,46 @@ def attribute_assign():
         args.attributes = 'user'
 
 
-# Logs in to export ICAT client using parameters specified in config, returns session ID
-def export_login():
-    export_client = icat.client.Client(export_config['url'])
-    return export_client.login('simple', {'username': export_config['username'], 'password': export_config['password']})
+# Logs in to an ICAT client using parameters specified in config, returns session ID
+#
+# :param
+def client_login(client_name, config_name):
+    return client_name.login('simple', {'username': config_name['username'], 'password': config_name['password']})
 
 
-# Logs in to import ICAT client using parameters specified in config, returns session ID
-def import_login():
-    import_client = icat.client.Client(import_config['url'])
-    return import_client.login('simple', {'username': import_config['username'], 'password': import_config['password']})
+def get_icat_limit():
+    return json.loads(requests.get('https://icatdev15.isis.cclrc.ac.uk/icat/properties').text)['maxEntities']
+
+
+def get_entities():
+    return export_client.search('SELECT count(entity) FROM ' + args.query + ' entity')[0]
 
 
 # Generates a random uuid and returns it
 def uuid_gen():
-    x = True
-    while x:
+    while True:
         generated = str(uuid.uuid1())
         if not os.path.exists(generated + '.txt'):
-            x = False
             return generated
 
 
 # Uses session ID, and arguments specified at the command line, to return data from export ICAT server
 def export_data():
     payload = {
-        'json': '{"sessionId":"' + export_id + '", "query":"' + args.query + '", "attributes":"' + args.attributes + '"}'}
+        'json': '{"sessionId":"' + export_id + '", "query":"SELECT entity FROM ' + args.query + ' entity LIMIT ' + str(current_pos) + ',' + str(increment) + '", "attributes":"' + args.attributes + '"}'}
     return requests.get('https://icatdev15.isis.cclrc.ac.uk/icat/port', params=payload)
 
 
 # Writes the exported data to specified data_file
 #
 # :param data: the exported ICAT data
-def write_data(data):
+def write_data(data, data_file):
     with open(data_file, 'w') as f:
-        f.write(data.text)
+        f.write(data.text.encode('utf8'))
 
 
 # Streams exported data to import ICAT server, returns request operation details
-def post_data():
+def post_data(data_file):
     with open(data_file, 'rb') as stream:
         files = {
             'data': (
@@ -114,6 +116,16 @@ def code_assignment(code):
     }[code]
 
 
+def transfer_data():
+    data_file = uuid_gen() + '.txt'
+
+    get_return = export_data()
+    write_data(get_return, data_file)
+
+    post_return = post_data(data_file)
+
+    os.remove(data_file)
+
 if __name__ == '__main__':
     config = ConfigParser.ConfigParser()
     config.read('config.ini')
@@ -124,22 +136,20 @@ if __name__ == '__main__':
     args = add_arguments()
     attribute_assign()
 
-    export_id = export_login()
-    import_id = import_login()
+    export_client = icat.client.Client(export_config['url'])
+    import_client = icat.client.Client(import_config['url'])
 
-    data_file = 'test.txt' #uuid_gen() + '.txt'
-    return_export_data = export_data()
-    print return_export_data
-    print return_export_data.status_code
-    print return_export_data.text
+    export_id = client_login(export_client, export_config)
+    import_id = client_login(import_client, import_config)
 
-    write_data(return_export_data)
+    data_left = True
+    current_pos = 0
+    increment = get_icat_limit()/10
+    entities = get_entities()
 
-    #status_code = post_data().status_code
-    #print code_assignment(status_code)
-    return_import_data = post_data()
-    print return_import_data
-    print return_import_data.status_code
-    print return_import_data.text
-
-    #os.remove(data_file)
+    while data_left:
+        transfer_data()
+        if current_pos + increment >= entities:
+            data_left = False
+        else:
+            current_pos += increment
