@@ -64,7 +64,7 @@ def uuid_gen():
 # Uses session ID, and arguments specified at the command line, to return data from export ICAT server
 def export_data():
     payload = {
-        'json': '{"sessionId":"' + export_id + '", "query":"SELECT entity FROM ' + args.query + ' entity LIMIT ' + str(current_pos) + ',' + str(increment) + '", "attributes":"' + args.attributes + '"}'}
+        'json': '{"sessionId":"' + export_id + '", "query":"SELECT entity FROM ' + args.query + ' entity LIMIT ' + str(current_pos) + ',' + str(limit) + '", "attributes":"' + args.attributes + '"}'}
     return requests.get(export_config['url'] + '/icat/port', params=payload)
 
 
@@ -99,18 +99,24 @@ def post_data(data_file):
         )
 
 
-# Assigns the status codes from the post request to report strings and returns them
-#
-# :param code: http status code from request.post().status_code
 def debug(return_data):
-    print return_data.text
+    if current_pos + limit >= entities:
+        print str(entities) + ' of ' + entities + ' entities processed'
+    else:
+        print str(current_pos + limit) + ' of ' + entities + ' entities processed'
+    
+    if return_data != 204:
+        return_text = json.loads(return_data.text)
+        print return_text['code'] + ' ' + return_text['message']
 
 
 def transfer_data():
     data_file = uuid_gen() + '.txt'
 
     get_return = export_data()
+    print 'Data exported'
     write_data(get_return, data_file)
+    print 'Data written to disk'
 
     post_return = post_data(data_file)
     debug(post_return)
@@ -135,12 +141,12 @@ if __name__ == '__main__':
 
     data_left = True
     current_pos = 0
-    increment = get_icat_limit()
+    limit = get_icat_limit()
     entities = get_entities()
 
     while data_left:
         transfer_data()
-        if current_pos + increment >= entities:
+        if current_pos + limit >= entities:
             data_left = False
         else:
-            current_pos += increment
+            current_pos += limit
