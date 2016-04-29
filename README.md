@@ -5,8 +5,8 @@ The aim of this script is to enable users to move specified entities from one IC
 
 ##Requirements
 Python 2.7 with modules:
-- icat
-  - requires suds
+- [python-icat](https://icatproject.org/user-documentation/python-icat/)
+  - suds
 - requests
 
 ##Use
@@ -43,7 +43,7 @@ Defines the action to be taken when a duplicate is found:
 - check: Checks that the old database matches the new - throws an exception if it does not.
 - overwrite: Replaces old data with the new.
 
-#####maxEntities
+#####maxEntities _(This is only available when operating on ICAT v4.5.1 servers or older, new versions grab limit)_
 The number of entities you wish to transfer in one chunk (ICAT servers have limits to how many can be transferred at once, code will throw an exception if over limit).
 
 ####Optional arguments
